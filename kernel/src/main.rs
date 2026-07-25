@@ -41,6 +41,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     gdt::init();
     interrupts::init_idt();
+    unsafe { interrupts::PICS.lock().initialize() };
     println!("gdt + idt loaded.");
 
     x86_64::instructions::interrupts::int3();
@@ -86,6 +87,14 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     }
     println!("heap-allocated Vec of {} elements, sum = {}", v.len(), v.iter().sum::<i32>());
     println!("the heap works.");
+
+    // From here on, real hardware interrupts are live: the timer fires
+    // continuously (each tick prints a '.', proof it's really firing, not
+    // asserted), and hlt in the loop below is now the actual idle
+    // instruction — the CPU sleeps until the next interrupt wakes it,
+    // rather than spinning.
+    x86_64::instructions::interrupts::enable();
+    println!("interrupts enabled. timer ticks below (one '.' per tick):");
 
     loop {
         x86_64_hlt();
