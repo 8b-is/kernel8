@@ -7,30 +7,85 @@
 #![no_main]
 #![feature(abi_x86_interrupt)]
 
+extern crate alloc;
+
 #[macro_use]
 mod serial;
+mod allocator;
+mod credits;
 mod gdt;
 mod interrupts;
+mod memory;
 
+use alloc::{boxed::Box, vec::Vec};
+
+use bootloader_api::config::{BootloaderConfig, Mapping};
 use bootloader_api::{entry_point, BootInfo};
 use core::panic::PanicInfo;
+use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Translate};
+use x86_64::VirtAddr;
 
-entry_point!(kernel_main);
+pub static BOOTLOADER_CONFIG: BootloaderConfig = {
+    let mut config = BootloaderConfig::new_default();
+    config.mappings.physical_memory = Some(Mapping::Dynamic);
+    config
+};
+
+entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     unsafe { serial::init() };
 
     println!("vakedkernel: booted.");
-    println!("physical_memory_offset: {:?}", boot_info.physical_memory_offset);
+    credits::print();
 
     gdt::init();
     interrupts::init_idt();
     println!("gdt + idt loaded.");
 
-    // Proof, not a claim: actually trigger the exception and let the real
-    // handler (interrupts.rs) catch it, instead of asserting the IDT works.
     x86_64::instructions::interrupts::int3();
     println!("survived a breakpoint exception. the IDT is real.");
+
+    let phys_mem_offset = VirtAddr::new(
+        boot_info.physical_memory_offset.into_option().expect("physical memory not mapped"),
+    );
+    let mut mapper = unsafe { memory::init(phys_mem_offset) };
+    let mut frame_allocator = unsafe { memory::BootInfoFrameAllocator::init(&boot_info.memory_regions) };
+
+    // Proof, not a claim: allocate a real frame, map a brand-new virtual
+    // page to it, write a known value through that mapping, and read it
+    // back through the SAME page (not the physical-memory-offset view) —
+    // if paging were wrong, this would fault or read back garbage.
+    let page = Page::containing_address(VirtAddr::new(0x1000_0000_0000));
+    let frame = frame_allocator.allocate_frame().expect("no usable frames left");
+    let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
+    unsafe {
+        mapper.map_to(page, frame, flags, &mut frame_allocator)
+            .expect("map_to failed")
+            .flush();
+    }
+    let ptr = page.start_address().as_mut_ptr::<u64>();
+    unsafe { ptr.write_volatile(0xC0FFEE_u64) };
+    let read_back = unsafe { ptr.read_volatile() };
+    println!("mapped a new page, wrote 0x{:X}, read back 0x{:X}.", 0xC0FFEE_u64, read_back);
+    assert_eq!(read_back, 0xC0FFEE, "paging is lying");
+
+    let translated = mapper.translate_addr(page.start_address());
+    println!("translate_addr(new page) -> {:?} (should be frame {:?})", translated, frame.start_address());
+    println!("paging works.");
+
+    allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap init failed");
+
+    // Proof: a real Box and a real Vec, on a real kernel heap, growing.
+    let boxed = Box::new(1991);
+    println!("heap-allocated Box: {}", boxed);
+
+    let mut v = Vec::new();
+    for i in 0..500 {
+        v.push(i);
+    }
+    println!("heap-allocated Vec of {} elements, sum = {}", v.len(), v.iter().sum::<i32>());
+    println!("the heap works.");
 
     loop {
         x86_64_hlt();
