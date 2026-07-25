@@ -1,47 +1,92 @@
-# vakedkernel
+# vakedkernel — v1.0
 
-A real, bootable, 100% Rust x86_64 kernel — the honest first milestone
-toward a Unix-like OS, not a finished one. Built on the actual
+A real, bootable, 100% Rust x86_64 kernel. Built on the actual
 [rust-osdev](https://github.com/rust-osdev) ecosystem (`bootloader`,
-`bootloader_api`, `uart_16550`), following the well-established `blog_os` /
-Redox lineage rather than inventing bare-metal plumbing from scratch.
+`bootloader_api`, `x86_64`, `uart_16550`, `pic8259`, `pc-keyboard`,
+`linked_list_allocator`), following the well-established `blog_os`
+lineage — every non-trivial piece adapted from real, current reference
+implementations (checked against docs.rs at time of writing, not
+reconstructed from memory), not invented bare-metal plumbing.
+
+"v1.0" here means: the classic hobbyist-OS core primitives all genuinely
+work, verified live. It does not mean Unix-*compliant* — that's a real,
+narrow, certifiable claim (The Open Group's actual trademark test suite;
+only a handful of systems, e.g. macOS, Solaris, AIX, ever passed it — Linux
+itself never did) that no project this size can honestly claim. What's
+below is Unix-*inspired* and real.
 
 ## What's actually true right now
 
-Verified by hand, not asserted:
+Verified by hand, running it, not asserted. Boot output (serial, `-serial
+stdio -display none`):
 
 ```
-$ cargo run -- --no-reboot
-...
 vakedkernel: booted.
-physical_memory_offset: None
-this is a real boot, not a simulation of one.
+Unix: Ken Thompson & Dennis Ritchie, Bell Labs, 1969.
+Linux: Linus Torvalds, 1991, and everyone since.
+This kernel exists downstream of both. Thank you.
+gdt + idt loaded.
+EXCEPTION: BREAKPOINT
+survived a breakpoint exception. the IDT is real.
+mapped a new page, wrote 0xC0FFEE, read back 0xC0FFEE.
+paging works.
+heap-allocated Box: 1991
+heap-allocated Vec of 500 elements, sum = 124750
+the heap works.
+interrupts enabled. timer ticks below (one '.' per tick):
+....................................
 ```
 
-That's the whole kernel today: it boots via BIOS in QEMU, brings up the
-serial port (COM1), and prints. `physical_memory_offset: None` is expected —
-the physical-memory-mapping bootloader feature isn't requested yet, not a
-bug.
+Concretely, what each line is actual proof of, not a claim:
 
-## What's not built yet (real roadmap, not shipped)
+- **Boots** via BIOS in QEMU, brings up serial (COM1).
+- **GDT + IDT + double-fault handler** — a real breakpoint exception (`int3`)
+  is triggered and caught by the actual handler, which prints and returns
+  cleanly. (Hit a real bug getting here: reloading only `CS` after building
+  a new GDT — the tutorial's own base case — left `SS` pointing at a stale
+  index that collided with the new GDT's TSS descriptor slot, double-faulting
+  on the very first interrupt return. Fixed by adding an explicit
+  `kernel_data_segment` and reloading `SS` too.)
+- **Paging** — a real frame is allocated, a brand-new virtual page is mapped
+  to it, a known value is written through that mapping and read back
+  correctly, and `translate_addr` confirms the mapping independently.
+- **Heap allocation** (`linked_list_allocator`) — a real `Box` and a `Vec`
+  that grows past its initial capacity (forcing a reallocation through the
+  actual allocator), value-checked (`sum(0..500) == 124750`), not just
+  "it compiled."
+- **Hardware interrupts** (PIC remap via `pic8259`, timer) — continuous,
+  live ticks, confirmed by watching them actually happen, including correct
+  PIC EOI signaling (get that wrong and the PIC stops sending interrupts
+  after the first one).
 
-In the order each actually unblocks the next:
+**Keyboard input is wired but not verified live.** Same PIC/IDT/EOI
+machinery as the timer, implemented against `pc-keyboard` 0.9.0's *current*
+API (`PS2Keyboard`, checked against docs.rs — the crate renamed its main
+struct since older tutorials were written, so copying old example code
+verbatim would not have compiled). It compiles and follows the reference
+exactly, but this sandbox runs QEMU headless (`-display none`) with no way
+to send a keystroke to a subprocess's virtual PS/2 controller. Run it
+yourself with a display attached to actually verify it.
 
-1. **GDT + IDT** — a proper Global Descriptor Table and interrupt handlers
-   (double-fault handler first, so a bug crashes with a message instead of
-   a silent triple-fault reboot).
-2. **Physical + virtual memory management** — frame allocator over the
-   bootloader's memory map, paging.
-3. **Heap allocation** — a global allocator, so `alloc::*` (Vec, Box, etc.)
-   works in kernel code.
-4. **A minimal process/scheduler concept** — this is where "Unix design"
-   actually starts meaning something, not just an aesthetic.
-5. **A syscall interface** — the actual userland boundary.
-6. **[rustybox](https://github.com/peterlodri-sec/rustybox) as the
-   userland** — the point of the whole exercise. RustyBox already gives a
-   real, working BusyBox-equivalent CLI toolkit in Rust; this kernel's job
-   is to become something rustybox can run *on*, not to reinvent a
-   userland.
+## What's not built (real v2.0 roadmap, not shipped, not silently implied)
+
+Each of these is roughly as much work as everything above combined —
+listed honestly as separate, large milestones, not squeezed into "v1.0" to
+make the number look bigger:
+
+1. **A task/scheduler abstraction.** blog_os's own next real chapter here is
+   a cooperative async/await executor, not preemptive multi-process
+   scheduling with hand-written context-switch assembly — that's a
+   deliberately bigger, separate undertaking even the reference tutorial
+   defers.
+2. **Ring 3 (usermode) + a syscall ABI.** The actual userland boundary —
+   privilege transitions, a real syscall table, TSS-based stack switching
+   for the return path.
+3. **An ELF loader** for running independent userspace programs.
+4. **[rustybox](https://github.com/peterlodri-sec/rustybox) as the
+   userland** — the actual point of the whole exercise. RustyBox already
+   gives a real, working BusyBox-equivalent CLI toolkit in Rust; this
+   kernel's job is to become something rustybox can run *on*.
 
 ## Running it
 
@@ -52,13 +97,25 @@ cargo run -- --no-reboot   # -Z bindeps requires the nightly pinned in rust-tool
 ```
 
 Requires QEMU (`brew install qemu` / your distro's package). `--no-reboot`
-stops QEMU cleanly on triple fault instead of rebooting into a loop — useful
-once step 1 above is unstable code, not needed for the current kernel which
-never faults.
+stops QEMU cleanly on a triple fault instead of rebooting into a loop.
 
 ## Why not a custom target spec
 
 Older Rust-OS tutorials use a hand-written `x86_64-*.json` target. Current
 `bootloader_api` targets the built-in Tier-2 `x86_64-unknown-none`, which is
-simpler and is what this repo uses — one less hand-maintained JSON file to
-get subtly wrong.
+simpler — one less hand-maintained JSON file to get subtly wrong.
+
+## On the `wild` linker
+
+Tried wiring [`wild`](https://github.com/wild-linker/wild) in as this
+kernel's linker (forked at
+[peterlodri-sec/wild](https://github.com/peterlodri-sec/wild)). Its own
+README only documents `-unknown-linux-gnu`/illumos userspace targets — no
+mention of bare-metal/freestanding support anywhere. Got as far as
+reaching the actual link step (confirming the binary runs and is invoked
+correctly) before hitting real argument-compatibility gaps between what
+rustc's freestanding-target linker invocation emits and what wild currently
+accepts. Reverted to the default linker rather than keep guessing flag
+combinations that could silently produce a subtly-broken kernel. This is
+genuinely unexplored territory for wild's own project, not a quick config
+fix — worth a real upstream issue, not a hack here.
