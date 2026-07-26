@@ -15,10 +15,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install pinned nightly toolchain (from rust-toolchain.toml)
-        run: |
-          rustup toolchain install nightly --component llvm-tools-preview
-          rustup target add x86_64-unknown-none --toolchain nightly
+      # rust-toolchain.toml is the single source of truth for channel,
+      # components (incl. rust-src — bootloader's build.rs needs it to
+      # build its own freestanding UEFI/BIOS stages), and targets. `rustup
+      # show` resolves the override and installs anything missing.
+      - name: Install pinned toolchain
+        run: rustup show
 
       # actions/cache is transparently redirected to Blacksmith's colocated
       # cache on Blacksmith runners — no config change needed for that part.
