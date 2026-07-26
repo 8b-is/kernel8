@@ -110,7 +110,7 @@ version number to make it look bigger:
    privilege transitions, a real syscall table, TSS-based stack switching
    for the return path.
 2. **An ELF loader** for running independent userspace programs.
-3. **[rustybox](https://github.com/peterlodri-sec/rustybox) as the
+3. **[rustybox](https://github.com/8b-is/rustybox) as the
    userland** — the actual point of the whole exercise. RustyBox already
    gives a real, working BusyBox-equivalent CLI toolkit in Rust (and now
    also a `spherepop` applet — a deterministic event-log kernel, unrelated
