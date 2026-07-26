@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-boot:
+    # Blacksmith runner — requires the Blacksmith GitHub App installed on
+    # this repo (app.blacksmith.sh), otherwise the job just queues forever
+    # waiting for a runner. See docs.blacksmith.sh/blacksmith-runners/overview.
+    runs-on: blacksmith-4vcpu-ubuntu-2204
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install pinned nightly toolchain (from rust-toolchain.toml)
+        run: |
+          rustup toolchain install nightly --component llvm-tools-preview
+          rustup target add x86_64-unknown-none --toolchain nightly
+
+      # actions/cache is transparently redirected to Blacksmith's colocated
+      # cache on Blacksmith runners — no config change needed for that part.
+      - name: Cache cargo registry + build artifacts
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install QEMU
+        run: sudo apt-get update && sudo apt-get install -y qemu-system-x86
+
+      - name: Build
+        run: cargo build -Z bindeps
+
+      # This kernel's own standard is "verified by running it, not asserted"
+      # (see README) — so CI holds itself to the same bar: boot it for real
+      # in headless QEMU and grep the serial output for the exact proof
+      # lines the README claims, instead of stopping at "it compiled."
+      - name: Boot-test in QEMU and verify real milestones
+        run: |
+          set -o pipefail
+          timeout 15 cargo run -Z bindeps -- --no-reboot 2>&1 | tee boot.log || true
+          fail=0
+          for line in \
+            "kernel8: booted." \
+            "survived a breakpoint exception. the IDT is real." \
+            "paging works." \
+            "the heap works." \
+            "cooperative multitasking works" \
+            "counted 20 timer quanta"; do
+            if ! grep -qF "$line" boot.log; then
+              echo "MISSING from boot output: $line"
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "--- full boot log ---"
+            cat boot.log
+            exit 1
+          fi
+          echo "all milestones verified in boot output."
