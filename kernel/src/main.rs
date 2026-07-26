@@ -1,4 +1,4 @@
-//! vakedkernel — a minimal, real, bootable x86_64 kernel. This is the
+//! kernel8 — a minimal, real, bootable x86_64 kernel. This is the
 //! honest starting point, not a finished OS: it boots, initializes serial,
 //! sets up a GDT/IDT with a double-fault handler, and prints. Paging, a
 //! heap, a scheduler, syscalls, and a rustybox-linked userland are the
@@ -38,7 +38,7 @@ entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     unsafe { serial::init() };
 
-    println!("vakedkernel: booted.");
+    println!("kernel8: booted.");
     credits::print();
 
     gdt::init();

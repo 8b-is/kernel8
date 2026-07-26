@@ -1,4 +1,4 @@
-# vakedkernel — v1.0
+# kernel8 — v42.0
 
 A real, bootable, 100% Rust x86_64 kernel. Built on the actual
 [rust-osdev](https://github.com/rust-osdev) ecosystem (`bootloader`,
@@ -8,8 +8,15 @@ lineage — every non-trivial piece adapted from real, current reference
 implementations (checked against docs.rs at time of writing, not
 reconstructed from memory), not invented bare-metal plumbing.
 
-"v1.0" here means that the classic hobbyist-OS core primitives described
-below genuinely work and have been verified live. It does not mean
+Formerly `vakedkernel` (`peterlodri-sec/vakedkernel`) — moved here to
+[8b-is](https://github.com/8b-is) and renamed.
+
+**"v42.0" is a Douglas Adams joke, not a claim of 42 real releases.** The
+actual milestones are the ones listed below — same discipline as the "v1.0"
+note it replaces: the number doesn't mean more than what's verified under
+it. What changed since the last checkpoint: a cooperative async/await
+executor, and one honestly-documented negative result (SIMD collision
+detection — real bug hit, not shipped, see below). It does not mean
 UNIX-compliant. UNIX® conformance is a specific certification administered
 by The Open Group against the Single UNIX Specification and its test
 suites, granted to particular registered products and releases — it isn't
@@ -23,7 +30,7 @@ Verified by hand, running it, not asserted. Boot output (serial, `-serial
 stdio -display none`):
 
 ```
-vakedkernel: booted.
+kernel8: booted.
 Unix: Ken Thompson & Dennis Ritchie, Bell Labs, 1969.
 Linux: Linus Torvalds, 1991, and everyone since.
 This kernel exists downstream of both. Thank you.
@@ -35,6 +42,11 @@ paging works.
 heap-allocated Box: 1991
 heap-allocated Vec of 500 elements, sum = 124750
 the heap works.
+task a: 1
+task b: 1
+task a: 2
+task b: 2
+cooperative multitasking works (interleaved output above, not sequential).
 interrupts enabled. timer ticks below (one '.' per tick):
 ....................................
 ```
@@ -56,6 +68,13 @@ Concretely, what each line is actual proof of, not a claim:
   that grows past its initial capacity (forcing a reallocation through the
   actual allocator), value-checked (`sum(0..500) == 124750`), not just
   "it compiled."
+- **Cooperative multitasking** (async/await, `SimpleExecutor`) — two tasks,
+  each yielding once mid-execution, produce interleaved output (`a1, b1,
+  a2, b2`) rather than sequential (`a1, a2, b1, b2`) — the only way to tell
+  "the executor interleaves" from "the executor just runs tasks one after
+  another." Deliberately cooperative, not preemptive multi-process
+  scheduling with hand-written context-switch assembly — that's a
+  separate, larger undertaking even blog_os defers.
 - **Hardware interrupts** (PIC remap via `pic8259`, timer) — continuous,
   live ticks, confirmed by watching them actually happen, including correct
   PIC EOI signaling (get that wrong and the PIC stops sending interrupts
@@ -70,25 +89,33 @@ exactly, but this sandbox runs QEMU headless (`-display none`) with no way
 to send a keystroke to a subprocess's virtual PS/2 controller. Run it
 yourself with a display attached to actually verify it.
 
-## What's not built (real v2.0 roadmap, not shipped, not silently implied)
+**Wide-SIMD collision detection was attempted and did not ship** — see
+`kernel/src/collision.rs`. Real technique (Erin Catto's "SIMD for
+Collision," box2d.org 2026-07-18: process multiple separating-axis tests
+in one SIMD lane), real code, verified working in an isolated minimal
+crate on this exact target. Integrated into this kernel's actual build
+(via the unstable `-Z bindeps` artifact-dependency mechanism this project
+already relies on for the bootloader), it reproducibly crashes rustc:
+`rustc-LLVM ERROR: Do not know how to split the result of this operator!`,
+persisting through opt-level 2 and 3. Not wired into the boot sequence.
+Worth an upstream rust-lang issue with the minimal repro before retrying.
+
+## What's not built (real roadmap, not shipped, not silently implied)
 
 Each of these is roughly as much work as everything above combined —
-listed honestly as separate, large milestones, not squeezed into "v1.0" to
-make the number look bigger:
+listed honestly as separate, large milestones, not squeezed into the
+version number to make it look bigger:
 
-1. **A task/scheduler abstraction.** blog_os's own next real chapter here is
-   a cooperative async/await executor, not preemptive multi-process
-   scheduling with hand-written context-switch assembly — that's a
-   deliberately bigger, separate undertaking even the reference tutorial
-   defers.
-2. **Ring 3 (usermode) + a syscall ABI.** The actual userland boundary —
+1. **Ring 3 (usermode) + a syscall ABI.** The actual userland boundary —
    privilege transitions, a real syscall table, TSS-based stack switching
    for the return path.
-3. **An ELF loader** for running independent userspace programs.
-4. **[rustybox](https://github.com/peterlodri-sec/rustybox) as the
+2. **An ELF loader** for running independent userspace programs.
+3. **[rustybox](https://github.com/peterlodri-sec/rustybox) as the
    userland** — the actual point of the whole exercise. RustyBox already
-   gives a real, working BusyBox-equivalent CLI toolkit in Rust; this
-   kernel's job is to become something rustybox can run *on*.
+   gives a real, working BusyBox-equivalent CLI toolkit in Rust (and now
+   also a `spherepop` applet — a deterministic event-log kernel, unrelated
+   to this repo's hardware-kernel track); this kernel's job is to become
+   something rustybox can run *on*.
 
 ## Running it
 

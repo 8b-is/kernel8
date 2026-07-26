@@ -3,7 +3,7 @@
 //! process multiple candidate separating axes in one SIMD lane, rather than
 //! one axis at a time.
 //!
-//! NOT currently wired into vakedkernel's boot sequence — kept here as a
+//! NOT currently wired into kernel8's boot sequence — kept here as a
 //! tested-in-isolation, not-integrated module, same standard as
 //! shared/tensor_compress.py's negative result in the sibling ML pipeline
 //! project: real code, really tested, honestly not shipped where it didn't
