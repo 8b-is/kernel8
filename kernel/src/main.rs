@@ -16,8 +16,10 @@ mod credits;
 mod gdt;
 mod interrupts;
 mod memory;
+mod task;
 
 use alloc::{boxed::Box, vec::Vec};
+use task::{simple_executor::SimpleExecutor, yield_now::yield_now, Task};
 
 use bootloader_api::config::{BootloaderConfig, Mapping};
 use bootloader_api::{entry_point, BootInfo};
@@ -87,6 +89,26 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     }
     println!("heap-allocated Vec of {} elements, sum = {}", v.len(), v.iter().sum::<i32>());
     println!("the heap works.");
+
+    // Proof: two cooperative tasks, each yielding once mid-execution. If
+    // the executor actually interleaves them (not just runs each to
+    // completion before starting the next), the output order proves it:
+    // a1, b1, a2, b2 — not a1, a2, b1, b2.
+    async fn task_a() {
+        println!("task a: 1");
+        yield_now().await;
+        println!("task a: 2");
+    }
+    async fn task_b() {
+        println!("task b: 1");
+        yield_now().await;
+        println!("task b: 2");
+    }
+    let mut executor = SimpleExecutor::new();
+    executor.spawn(Task::new(task_a()));
+    executor.spawn(Task::new(task_b()));
+    executor.run();
+    println!("cooperative multitasking works (interleaved output above, not sequential).");
 
     // From here on, real hardware interrupts are live: the timer fires
     // continuously (each tick prints a '.', proof it's really firing, not
