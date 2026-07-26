@@ -8,12 +8,14 @@ lineage — every non-trivial piece adapted from real, current reference
 implementations (checked against docs.rs at time of writing, not
 reconstructed from memory), not invented bare-metal plumbing.
 
-"v1.0" here means: the classic hobbyist-OS core primitives all genuinely
-work, verified live. It does not mean Unix-*compliant* — that's a real,
-narrow, certifiable claim (The Open Group's actual trademark test suite;
-only a handful of systems, e.g. macOS, Solaris, AIX, ever passed it — Linux
-itself never did) that no project this size can honestly claim. What's
-below is Unix-*inspired* and real.
+"v1.0" here means that the classic hobbyist-OS core primitives described
+below genuinely work and have been verified live. It does not mean
+UNIX-compliant. UNIX® conformance is a specific certification administered
+by The Open Group against the Single UNIX Specification and its test
+suites, granted to particular registered products and releases — it isn't
+a property of operating-system families in the abstract, and this project
+has neither attempted nor claimed that certification. What follows is
+Unix-inspired, not UNIX-certified, and real.
 
 ## What's actually true right now
 
