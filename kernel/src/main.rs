@@ -116,7 +116,20 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // instruction — the CPU sleeps until the next interrupt wakes it,
     // rather than spinning.
     x86_64::instructions::interrupts::enable();
-    println!("interrupts enabled. timer ticks below (one '.' per tick):");
+    println!("interrupts enabled. counting quanta (timer ticks) before free-running:");
+
+    // Proof: a real atomic integer counts real hardware interrupts. No
+    // float, no interpolation, no "roughly N" — quantum literally means
+    // count (see interrupts::ticks() and the doc comment on it).
+    const QUANTA_TO_COUNT: u64 = 20;
+    while interrupts::ticks() < QUANTA_TO_COUNT {
+        x86_64_hlt();
+    }
+    println!(
+        "counted {} timer quanta — discrete, not interpolated.",
+        interrupts::ticks()
+    );
+    println!("free-running now, one '.' per quantum:");
 
     loop {
         x86_64_hlt();

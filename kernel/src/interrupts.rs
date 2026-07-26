@@ -5,6 +5,7 @@
 //! to test this); the double-fault handler exists so a bug crashes with a
 //! message on this kernel's own serial line instead of silently
 //! triple-faulting (an instant, unexplained QEMU reboot).
+use core::sync::atomic::{AtomicU64, Ordering};
 use lazy_static::lazy_static;
 use pc_keyboard::{layouts, DecodedKey, HandleControl, PS2Keyboard, ScancodeSet1};
 use pic8259::ChainedPics;
@@ -13,6 +14,20 @@ use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
 use x86_64::instructions::port::Port;
 
 use crate::gdt;
+
+/// A PIT tick is a naturally quantized event — one indivisible interrupt,
+/// never a fraction of one. Counting them with an integer, rather than
+/// estimating elapsed time as a continuous `f64` (the usual OS-timekeeping
+/// move, and the one this kernel deliberately does NOT make), is the literal
+/// meaning of "quantum": quantus, Latin for "how much," is always a count.
+/// See https://pocoo.vaked.dev/posts/2026-07-26-quantum-means-counting.
+static TICKS: AtomicU64 = AtomicU64::new(0);
+
+/// The exact count of timer interrupts serviced since boot. Integer, exact,
+/// no interpolation — "this many, not somewhere-in-between-this-many."
+pub fn ticks() -> u64 {
+    TICKS.load(Ordering::Relaxed)
+}
 
 pub const PIC_1_OFFSET: u8 = 32;
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
@@ -71,6 +86,7 @@ extern "x86-interrupt" fn double_fault_handler(
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
+    TICKS.fetch_add(1, Ordering::Relaxed);
     crate::print!(".");
     unsafe {
         PICS.lock().notify_end_of_interrupt(InterruptIndex::Timer.as_u8());

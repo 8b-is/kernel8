@@ -47,7 +47,9 @@ task b: 1
 task a: 2
 task b: 2
 cooperative multitasking works (interleaved output above, not sequential).
-interrupts enabled. timer ticks below (one '.' per tick):
+interrupts enabled. counting quanta (timer ticks) before free-running:
+....................counted 20 timer quanta — discrete, not interpolated.
+free-running now, one '.' per quantum:
 ....................................
 ```
 
@@ -79,6 +81,15 @@ Concretely, what each line is actual proof of, not a claim:
   live ticks, confirmed by watching them actually happen, including correct
   PIC EOI signaling (get that wrong and the PIC stops sending interrupts
   after the first one).
+- **Quantum tick counter** (`interrupts::ticks()`) — a real `AtomicU64`
+  incremented once per timer interrupt, no float, no interpolation. Per
+  [pocoo.vaked.dev/posts/2026-07-26-quantum-means-counting](https://pocoo.vaked.dev/posts/2026-07-26-quantum-means-counting):
+  *quantum* is Latin *quantus*, "how much," and "how much" is always a
+  count — the discrete is the floor, the continuum (the usual `f64`
+  elapsed-time approach to OS timekeeping) is the derived idealization
+  built on top of it. Boot proves the counter is exact, not estimated: it
+  waits for `ticks() == 20`, and the number of `.` printed in that stretch
+  is observably, exactly 20 — see the boot log above.
 
 **Keyboard input is wired but not verified live.** Same PIC/IDT/EOI
 machinery as the timer, implemented against `pc-keyboard` 0.9.0's *current*
