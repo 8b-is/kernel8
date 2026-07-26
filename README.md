@@ -1,5 +1,7 @@
 # kernel8 — v42.0
 
+[![CI](https://github.com/8b-is/kernel8/actions/workflows/ci.yml/badge.svg)](https://github.com/8b-is/kernel8/actions/workflows/ci.yml)
+
 A real, bootable, 100% Rust x86_64 kernel. Built on the actual
 [rust-osdev](https://github.com/rust-osdev) ecosystem (`bootloader`,
 `bootloader_api`, `x86_64`, `uart_16550`, `pic8259`, `pc-keyboard`,
@@ -91,14 +93,28 @@ Concretely, what each line is actual proof of, not a claim:
   waits for `ticks() == 20`, and the number of `.` printed in that stretch
   is observably, exactly 20 — see the boot log above.
 
-**Keyboard input is wired but not verified live.** Same PIC/IDT/EOI
-machinery as the timer, implemented against `pc-keyboard` 0.9.0's *current*
-API (`PS2Keyboard`, checked against docs.rs — the crate renamed its main
-struct since older tutorials were written, so copying old example code
-verbatim would not have compiled). It compiles and follows the reference
-exactly, but this sandbox runs QEMU headless (`-display none`) with no way
-to send a keystroke to a subprocess's virtual PS/2 controller. Run it
-yourself with a display attached to actually verify it.
+- **Keyboard input, verified live** — same PIC/IDT/EOI machinery as the
+  timer, implemented against `pc-keyboard` 0.9.0's *current* API
+  (`PS2Keyboard`, checked against docs.rs — the crate renamed its main
+  struct since older tutorials were written). No display was needed to
+  prove this after all: QEMU's HMP monitor can inject real PS/2 scancodes
+  headlessly (`-monitor telnet:...` + `sendkey a`), which drives the exact
+  same hardware-interrupt path a real keyboard would — port 0x60 read,
+  IDT dispatch, `PS2Keyboard` decode, print. Injecting `a`, `b`, `c` and
+  reading the serial log back shows `abc` inline in the timer-tick dot
+  stream, exactly where the keys were sent.
+
+**Frame allocator never frees.** `BootInfoFrameAllocator` (the blog_os
+reference implementation this follows) only ever advances forward through
+usable physical frames — there is no `deallocate_frame`. Fine for
+everything built so far (a few dozen frames total: the heap, one demo
+page). Real userland work — an ELF loader mapping process segments, a
+scheduler tearing down exited processes — will exhaust physical memory
+under this allocator eventually, since nothing is ever returned to the
+pool. Flagged here, not fixed pre-emptively: the actual free-list
+bookkeeping this needs is naturally part of the Ring 3 / process
+lifecycle milestone below, not something to bolt on speculatively before
+anything exists that would exercise it.
 
 **Wide-SIMD collision detection was attempted and did not ship** — see
 `kernel/src/collision.rs`. Real technique (Erin Catto's "SIMD for

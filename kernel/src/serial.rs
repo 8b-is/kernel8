@@ -23,7 +23,7 @@ struct SerialWriter;
 impl fmt::Write for SerialWriter {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         if let Some(uart) = SERIAL.lock().as_mut() {
-            let _ = uart.send_bytes_exact(s.as_bytes());
+            uart.send_bytes_exact(s.as_bytes());
         }
         Ok(())
     }
