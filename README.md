@@ -1,4 +1,15 @@
-# kernel8 — v42.0
+# kernel8 — v42.0 · 0.2.0
+
+**CPU (hearth) of the ayeOS mesh.** x86_64 Rust kernel. Bootable. Cooperative async. Paging. Heap.
+
+Part of the [ayeOS](https://github.com/8b-is/ayeos) ternary inference mesh:
+| Layer | Project |
+|-------|---------|
+| **CPU (hearth)** | kernel8 (this repo) |
+| GPU (brain) | [MLX-QUANT](https://github.com/8b-is/MLX-QUANT) |
+| Coord | [vaked](https://github.com/8b-is/vaked) |
+| Daemon | [ayeOS](https://github.com/8b-is/ayeos) |
+| Portal | [axiomquant.org](https://axiomquant.org) |
 
 [![CI](https://github.com/8b-is/kernel8/actions/workflows/ci.yml/badge.svg)](https://github.com/8b-is/kernel8/actions/workflows/ci.yml)
 
