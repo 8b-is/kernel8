@@ -10,7 +10,7 @@ jobs:
   build-and-boot:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       # rust-toolchain.toml is the single source of truth for channel,
       # components (incl. rust-src — bootloader's build.rs needs it to
@@ -18,17 +18,6 @@ jobs:
       # show` resolves the override and installs anything missing.
       - name: Install pinned toolchain
         run: rustup show
-
-      - name: Cache cargo registry + build artifacts
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
 
       - name: Install QEMU
         run: sudo apt-get update && sudo apt-get install -y qemu-system-x86
