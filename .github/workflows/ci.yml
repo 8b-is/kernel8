@@ -8,10 +8,7 @@ on:
 
 jobs:
   build-and-boot:
-    # Blacksmith runner — requires the Blacksmith GitHub App installed on
-    # this repo (app.blacksmith.sh), otherwise the job just queues forever
-    # waiting for a runner. See docs.blacksmith.sh/blacksmith-runners/overview.
-    runs-on: blacksmith-4vcpu-ubuntu-2204
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v7
 
@@ -22,8 +19,6 @@ jobs:
       - name: Install pinned toolchain
         run: rustup show
 
-      # actions/cache is transparently redirected to Blacksmith's colocated
-      # cache on Blacksmith runners — no config change needed for that part.
       - name: Cache cargo registry + build artifacts
         uses: actions/cache@v6
         with:
