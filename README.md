@@ -186,3 +186,22 @@ accepts. Reverted to the default linker rather than keep guessing flag
 combinations that could silently produce a subtly-broken kernel. This is
 genuinely unexplored territory for wild's own project, not a quick config
 fix — worth a real upstream issue, not a hack here.
+
+## Validation checks
+
+CI tests the actual cooperative task modules on the host, then validates the
+QEMU serial log for paging readback, heap values, task order and a timer count
+of at least twenty. Panic/fault logs and repeated boots are rejected. Timer
+interrupts remain enabled, so dot count is not treated as an atomic snapshot.
+
+Run the dependency-free checks separately from a real kernel boot:
+
+```sh
+rustc --edition=2021 --test tests/host_executor.rs -o /tmp/kernel8-host-tests
+/tmp/kernel8-host-tests
+python3 -m unittest discover -s tests -p 'test_boot_log.py' -v
+python3 scripts/verify_boot.py boot.log
+```
+
+Synthetic-log and host tests do not verify x86 boot, paging, interrupts or
+keyboard hardware. Those still require the actual QEMU run.
